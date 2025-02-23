@@ -1,7 +1,7 @@
 import streamlit as st
 import random
-import sqlite3
 import pandas as pd
+import sqlite3
 import plotly.express as px
 from typing import List, Tuple
 
@@ -62,6 +62,7 @@ class AppFeatures:
             (challenge, "In Progress")
         )
         st.success("✅ Challenge added successfully!")
+        st.rerun()
 
     def update_challenge_status(self, challenge_id: int, status: str):
         self.db.execute_query(
@@ -69,6 +70,7 @@ class AppFeatures:
             (status, challenge_id)
         )
         st.success("✅ Challenge status updated!")
+        st.rerun()
 
     def get_challenges(self) -> List[Tuple]:
         return self.db.execute_query(
@@ -80,6 +82,7 @@ class AppFeatures:
             "DELETE FROM challenges WHERE id = ?", (challenge_id,)
         )
         st.warning("❌ Challenge deleted!")
+        st.rerun()
 
     def log_mistake(self, mistake: str, lesson: str):
         self.db.execute_query(
@@ -87,6 +90,7 @@ class AppFeatures:
             (mistake, lesson)
         )
         st.success("✅ Mistake logged successfully!")
+        st.rerun()
 
     def get_mistakes(self) -> List[Tuple]:
         return self.db.execute_query(
@@ -98,6 +102,7 @@ class AppFeatures:
             "DELETE FROM mistakes WHERE id = ?", (mistake_id,)
         )
         st.warning("❌ Mistake deleted!")
+        st.rerun()
 
     def export_data(self, table_name: str):
         query = f"SELECT * FROM {table_name}"
@@ -137,11 +142,9 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # Initialize components
     db = DatabaseManager()
     features = AppFeatures(db)
 
-    # Sidebar
     with st.sidebar:
         st.title("🌱 Growth Navigator")
         menu = st.radio("Menu", [
@@ -154,10 +157,18 @@ def main():
         st.markdown("---")
         st.markdown(f"### Today's Motivation\n💬 {features.get_random_quote()}")
 
-        # Dark Mode Toggle
         dark_mode = st.toggle("🌙 Dark Mode")
+        if dark_mode:
+            st.markdown(
+                """
+                <style>
+                body { background-color: #121212; color: white; }
+                .stApp { background-color: #121212; }
+                .css-1aumxhk { background-color: #121212 !important; }
+                </style>
+                """, unsafe_allow_html=True
+            )
 
-    # Main Content
     if menu == "Dashboard":
         st.header("Personal Growth Dashboard")
         st.subheader("Recent Challenges")
@@ -171,16 +182,6 @@ def main():
         if st.button("Add Challenge"):
             features.add_challenge(new_challenge)
 
-        challenges = features.get_challenges()
-        if challenges:
-            for challenge in challenges:
-                col1, col2, col3 = st.columns([3, 1, 1])
-                col1.text(challenge[1])
-                if col2.button("✅ Complete", key=f"comp_{challenge[0]}"):
-                    features.update_challenge_status(challenge[0], "Completed")
-                if col3.button("❌ Delete", key=f"del_{challenge[0]}"):
-                    features.delete_challenge(challenge[0])
-
     elif menu == "Mistake Journal":
         st.header("📝 Mistake Journal")
         mistake = st.text_input("Log a mistake:")
@@ -188,18 +189,9 @@ def main():
         if st.button("Log Mistake"):
             features.log_mistake(mistake, lesson)
 
-        mistakes = features.get_mistakes()
-        if mistakes:
-            for mistake in mistakes:
-                col1, col2 = st.columns([3, 1])
-                col1.text(f"{mistake[1]} - {mistake[2]}")
-                if col2.button("❌ Delete", key=f"del_mistake_{mistake[0]}"):
-                    features.delete_mistake(mistake[0])
-
     elif menu == "Progress Analytics":
         st.header("📊 Progress Analytics")
         features.plot_progress()
-
         st.subheader("Export Data")
         features.export_data("challenges")
         features.export_data("mistakes")
