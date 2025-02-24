@@ -1,338 +1,238 @@
 import streamlit as st
 import random
-import pandas as pd
-import sqlite3
-import plotly.express as px
-from typing import List, Tuple
 from datetime import datetime
 
-# Configure page theme for dark mode
+# App configuration
+
 st.set_page_config(
-    page_title="Growth Mindset Coach",
+    page_title="Growth Mindset Companion",
     page_icon="🌱",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="centered"
 )
 
-# Apply dark theme
+# Session state initialization
+
+if 'progress' not in st.session_state:
+    st.session_state.progress = []
+
+if 'challenge' not in st.session_state:
+    st.session_state.challenge = ""
+
+# Custom CSS for navigation
+
 st.markdown("""
-    <style>
-    .stApp {
-        background-color: #1E1E1E;
-        color: #FFFFFF;
-    }
-    .stButton button {
-        background-color: #4CAF50;
-        color: white;
-    }
-    .stTextInput input {
-        background-color: #2D2D2D;
-        color: white;
-    }
-    .stTextArea textarea {
-        background-color: #2D2D2D;
-        color: white;
-    }
-    </style>
+<style>
+/* Sidebar styling */
+.css-1d391kg {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    background-color: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+}
+
+/* Navigation buttons */
+.stButton>button {
+    width: 100%;
+    border-radius: 5px;
+    padding: 10px;
+    margin: 5px 0;
+    transition: all 0.3s ease;
+}
+
+.stButton>button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Active page indicator */
+.active-page {
+    background-color: #0d6efd !important;
+    color: white !important;
+    font-weight: bold;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# Constants
-QUOTES = [
-    "Believe you can and you're halfway there.",
-    "The only way to do great work is to love what you do.",
-    "Your limitation—it's only your imagination.",
-    "Push yourself, because no one else is going to do it for you.",
-    "Great things never come from comfort zones.",
-    "Mistakes are proof that you are trying.",
-    "Success is not the key to happiness. Happiness is the key to success."
-]
+# Header Section
 
-class DatabaseManager:
-    def __init__(self, database_name: str = "growth_mindset.db"):
-        self.conn = sqlite3.connect(database_name, check_same_thread=False)
-        self.migrate_database()
+st.title("🌱 Growth Mindset Companion")
 
-    def migrate_database(self):
-        """Create or migrate database tables"""
-        with self.conn:
-            # Check if tables exist
-            cursor = self.conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='challenges'")
-            table_exists = cursor.fetchone() is not None
+st.subheader("Empower Your Learning Journey")
 
-            if not table_exists:
-                # Create new tables
-                self.conn.execute("""
-                    CREATE TABLE challenges (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        challenge TEXT NOT NULL,
-                        status TEXT CHECK(status IN ('In Progress', 'Completed')) NOT NULL DEFAULT 'In Progress'
-                    )
-                """)
-                self.conn.execute("""
-                    CREATE TABLE mistakes (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        mistake TEXT NOT NULL,
-                        lesson TEXT NOT NULL
-                    )
-                """)
-            else:
-                # Check if we need to add created_at column
-                cursor.execute("PRAGMA table_info(challenges)")
-                columns = [column[1] for column in cursor.fetchall()]
-                
-                if 'created_at' in columns:
-                    # Drop the created_at column by recreating the table
-                    self.conn.execute("""
-                        CREATE TABLE challenges_new (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            challenge TEXT NOT NULL,
-                            status TEXT CHECK(status IN ('In Progress', 'Completed')) NOT NULL DEFAULT 'In Progress'
-                        )
-                    """)
-                    self.conn.execute("""
-                        INSERT INTO challenges_new (id, challenge, status)
-                        SELECT id, challenge, status FROM challenges
-                    """)
-                    self.conn.execute("DROP TABLE challenges")
-                    self.conn.execute("ALTER TABLE challenges_new RENAME TO challenges")
+# Professional Navigation
 
-    def execute_query(self, query: str, params: Tuple = ()):
-        with self.conn:
-            cursor = self.conn.cursor()
-            cursor.execute(query, params)
-            if query.strip().upper().startswith("SELECT"):
-                return cursor.fetchall()
-            self.conn.commit()
-            return None
+def create_nav_button(label, page):
 
-    def __del__(self):
-        self.conn.close()
+    if st.sidebar.button(label):
+        st.session_state.page = page
 
-class AppFeatures:
-    def __init__(self, db: DatabaseManager):
-        self.db = db
+# Initialize session state for page navigation
 
-    def get_random_quote(self) -> str:
-        return random.choice(QUOTES)
+if 'page' not in st.session_state:
+    st.session_state.page = 'Home'
 
-    def add_challenge(self, challenge: str):
-        if not challenge.strip():
-            st.error("Please enter a challenge description!")
-            return
+# Sidebar Navigation
+
+st.sidebar.title("Navigation")
+
+pages = {
+    "🏠 Home": "Home",
+    "🧠 Mindset Quiz": "Mindset Quiz",
+    "📈 Progress Tracker": "Progress Tracker",
+    "💪 Daily Challenge": "Daily Challenge"
+}
+
+for label, page in pages.items():
+
+    if st.session_state.page == page:
+
+        st.sidebar.button(label, key=label, disabled=True, 
+                          
+                         help="You're on this page", 
+                         type="primary")
         
-        self.db.execute_query(
-            "INSERT INTO challenges (challenge, status) VALUES (?, ?)",
-            (challenge.strip(), "In Progress")
-        )
-        st.success("✅ Challenge added successfully!")
-
-    def display_challenges(self):
-        challenges = self.db.execute_query(
-            "SELECT id, challenge, status FROM challenges ORDER BY id DESC"
-        )
+    else:
         
-        if not challenges:
-            st.info("No challenges found. Add your first challenge!")
-            return
+        if st.sidebar.button(label, key=label):
+            st.session_state.page = page
 
-        for id, challenge, status in challenges:
-            col1, col2, col3 = st.columns([3, 1, 1])
-            
-            with col1:
-                st.write(f"**{challenge}**")
-            
-            with col2:
-                new_status = st.selectbox(
-                    "Status",
-                    ["In Progress", "Completed"],
-                    index=0 if status == "In Progress" else 1,
-                    key=f"status_{id}"
-                )
-                if new_status != status:
-                    self.update_challenge_status(id, new_status)
-            
-            with col3:
-                if st.button("Delete", key=f"del_{id}"):
-                    self.delete_challenge(id)
-                    st.rerun()
+# Attribution
 
-    def update_challenge_status(self, challenge_id: int, status: str):
-        self.db.execute_query(
-            "UPDATE challenges SET status = ? WHERE id = ?",
-            (status, challenge_id)
-        )
-        st.success("✅ Challenge status updated!")
+st.sidebar.markdown("---")
 
-    def delete_challenge(self, challenge_id: int):
-        self.db.execute_query(
-            "DELETE FROM challenges WHERE id = ?",
-            (challenge_id,)
-        )
-        st.warning("❌ Challenge deleted!")
+st.sidebar.markdown("### Made by [Ps Qasim]()")
 
-    def log_mistake(self, mistake: str, lesson: str):
-        if not mistake.strip() or not lesson.strip():
-            st.error("Please fill in both mistake and lesson fields!")
-            return
-            
-        self.db.execute_query(
-            "INSERT INTO mistakes (mistake, lesson) VALUES (?, ?)",
-            (mistake.strip(), lesson.strip())
-        )
-        st.success("✅ Mistake logged successfully!")
+st.sidebar.markdown("Version 1.0.0")
 
-    def display_mistakes(self):
-        mistakes = self.db.execute_query(
-            "SELECT id, mistake, lesson FROM mistakes ORDER BY id DESC"
-        )
-        
-        if not mistakes:
-            st.info("No mistakes logged yet. Use mistakes as learning opportunities!")
-            return
+# Content Sections
 
-        for id, mistake, lesson in mistakes:
-            with st.expander(f"📝 {mistake[:50]}{'...' if len(mistake) > 50 else ''}", expanded=False):
-                st.write("**Mistake:**")
-                st.write(mistake)
-                st.write("**Lesson Learned:**")
-                st.write(lesson)
-                if st.button("Delete Entry", key=f"del_mistake_{id}"):
-                    self.delete_mistake(id)
-                    st.rerun()
+if st.session_state.page == "Home":
 
-    def delete_mistake(self, mistake_id: int):
-        self.db.execute_query(
-            "DELETE FROM mistakes WHERE id = ?",
-            (mistake_id,)
-        )
-        st.warning("❌ Mistake entry deleted!")
+    st.header("Welcome to Your Growth Journey!")
+    
+    with st.expander("What is Growth Mindset?"):
 
-    def plot_progress(self):
-        challenges = self.db.execute_query(
-            "SELECT status, COUNT(*) FROM challenges GROUP BY status"
-        )
-        
-        if not challenges:
-            st.info("No challenges found. Add some to track your progress!")
-            return
+        st.write("""
+        *A growth mindset* is the belief that your abilities can be developed through:
+        - Hard work
+        - Perseverance
+        - Learning from mistakes
+        - Embracing challenges
+        """)
 
-        df = pd.DataFrame(challenges, columns=['Status', 'Count'])
-        
-        fig = px.pie(
-            df,
-            names='Status',
-            values='Count',
-            title="Challenge Progress Distribution",
-            color_discrete_sequence=["#4CAF50", "#FFA726"],
-            hole=0.3
-        )
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font_color='white'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        st.image("https://cdn-icons-png.flaticon.com/512/3281/3281306.png", width=200)
+    
+    with st.expander("Why Adopt Growth Mindset?"):
 
-        total_challenges = df['Count'].sum()
-        completed = df[df['Status'] == 'Completed']['Count'].sum() if 'Completed' in df['Status'].values else 0
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Challenges", total_challenges)
-        with col2:
-            st.metric("Completed", completed)
-        with col3:
-            completion_rate = (completed / total_challenges * 100) if total_challenges > 0 else 0
-            st.metric("Completion Rate", f"{completion_rate:.1f}%")
+        st.write("""
+        - 🚀 Overcome challenges effectively
+        - 📈 Improve academic performance
+        - 💡 Enhance creativity and problem-solving
+        - 🧠 Build resilience and adaptability
+        """)
+    
+    with st.expander("5 Daily Practices"):
 
-    def export_data(self):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            challenges_df = pd.read_sql("SELECT * FROM challenges", self.db.conn)
-            st.download_button(
-                label="📥 Download Challenges Data",
-                data=challenges_df.to_csv(index=False),
-                file_name="challenges_data.csv",
-                mime="text/csv",
-            )
-        
-        with col2:
-            mistakes_df = pd.read_sql("SELECT * FROM mistakes", self.db.conn)
-            st.download_button(
-                label="📥 Download Mistakes Data",
-                data=mistakes_df.to_csv(index=False),
-                file_name="mistakes_data.csv",
-                mime="text/csv",
-            )
+        st.write("""
+        1. Embrace learning opportunities
+        2. Reframe challenges as opportunities
+        3. Celebrate small wins
+        4. Learn from feedback
+        5. Practice positive self-talk
+        """)
 
-def main():
-    db = DatabaseManager()
-    features = AppFeatures(db)
+elif st.session_state.page == "Mindset Quiz":
 
-    # Sidebar
-    with st.sidebar:
-        st.title("🌱 Growth Navigator")
-        menu = st.radio("Menu", [
-            "Dashboard",
-            "Challenge Tracker",
-            "Mistake Journal",
-            "Progress Analytics"
-        ])
-        
-        st.markdown("---")
-        st.markdown(f"### Today's Motivation\n💬 {features.get_random_quote()}")
+    st.header("🧠 Growth Mindset Assessment")
+    
+    questions = {
+        "q1": {
+            "question": "When facing a difficult problem, you:",
+            "options": [
+                "Avoid it to prevent failure",
+                "Try it immediately without fear",
+                "Feel nervous but attempt it anyway"
+            ],
+            "correct": 2
+        },
 
-    # Main content
-    if menu == "Dashboard":
-        st.header("🎯 Personal Growth Dashboard")
-        
-        # Quick Add Section
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Quick Add Challenge")
-            new_challenge = st.text_input("Enter a new challenge:")
-            if st.button("Add Challenge"):
-                features.add_challenge(new_challenge)
-                
-        with col2:
-            st.subheader("Quick Add Mistake")
-            new_mistake = st.text_input("What did you learn from today?")
-            new_lesson = st.text_input("What's the lesson?")
-            if st.button("Log Mistake"):
-                features.log_mistake(new_mistake, new_lesson)
-        
-        # Progress Overview
-        st.subheader("Progress Overview")
-        features.plot_progress()
+        "q2": {
+            "question": "When receiving feedback, you:",
+            "options": [
+                "Take it personally",
+                "See it as valuable input",
+                "Ignore it completely"
+            ],
+            "correct": 1
+        }
+    }
+    
+    score = 0
+    for q_id, q in questions.items():
 
-    elif menu == "Challenge Tracker":
-        st.header("📌 Challenge Tracker")
-        new_challenge = st.text_input("Add a new challenge:")
-        if st.button("Add Challenge"):
-            features.add_challenge(new_challenge)
-        
-        st.markdown("---")
-        features.display_challenges()
+        answer = st.selectbox(q["question"], q["options"])
 
-    elif menu == "Mistake Journal":
-        st.header("📝 Mistake Journal")
-        mistake = st.text_input("What happened?")
-        lesson = st.text_area("What did you learn from this?")
-        if st.button("Log Mistake"):
-            features.log_mistake(mistake, lesson)
-            
-        st.markdown("---")
-        features.display_mistakes()
+        if q["options"].index(answer) == q["correct"]:
+            score += 1
+            st.success("Correct! This reflects a growth mindset!")
 
-    elif menu == "Progress Analytics":
-        st.header("📊 Progress Analytics")
-        features.plot_progress()
-        
-        st.markdown("---")
-        st.subheader("Export Data")
-        features.export_data()
+        else:
+            st.error("Consider reframing this perspective")
+    
+    st.metric("Your Growth Score", f"{score}/{len(questions)}")
 
-if __name__ == "__main__":
-    main()
+elif st.session_state.page == "Progress Tracker":
+
+    st.header("📈 Progress Tracker")
+    
+    today = datetime.today().strftime("%Y-%m-%d")
+
+    achievement = st.text_area(f"Today's Growth ({today})", 
+                              "Today I learned...")
+    
+    
+    if st.button("Save Entry"):
+
+        st.session_state.progress.append({
+            "date": today,
+            "entry": achievement
+        })
+
+        st.success("Progress saved!")
+    
+    st.subheader("Growth Journal")
+
+    for entry in reversed(st.session_state.progress):
+
+        st.write(f"{entry['date']}: {entry['entry']}")
+
+elif st.session_state.page == "Daily Challenge":
+
+    st.header("💪 Daily Growth Challenge")
+    
+    challenges = [
+
+        "Learn something new outside your comfort zone",
+        "Reframe a recent mistake as a learning opportunity",
+        "Ask for constructive feedback from someone",
+        "Teach a concept you learned to someone else",
+        "Try a different approach to a problem you're facing"
+    ]
+    
+    if st.button("Generate New Challenge"):
+
+        st.session_state.challenge = random.choice(challenges)
+    
+    if st.session_state.challenge:
+
+        st.subheader("Today's Challenge")
+
+        st.info(f"🌟 {st.session_state.challenge}")
+
+        st.write("Share your experience in the progress tracker!")
+
+# Footer
+
+st.markdown("---")
+st.markdown("Built with ❤ using Streamlit ")
+st.markdown("© 2025 Ps Qasim. All rights reserved.")
